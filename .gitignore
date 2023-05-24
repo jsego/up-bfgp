@@ -1,0 +1,8 @@
+.idea
+experiments/
+up_bfgp.egg-info/
+up_bfgp/bfgp_pp/
+up_bfgp/experiments/
+up_bfgp/tmp/
+venv/
+
