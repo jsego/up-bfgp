@@ -1,4 +1,8 @@
+import os
 import random
+import shutil
+import subprocess
+import tempfile
 from typing import Optional, Callable, IO, List
 from unified_planning.engines.results import PlanGenerationResultStatus
 import unified_planning as up
@@ -6,9 +10,10 @@ import unified_planning.engines as engines
 from unified_planning.model import ProblemKind
 from unified_planning.engines import PDDLPlanner, LogMessage
 import sys
+from unified_planning.io import PDDLReader
 
 
-class BestFirstGeneralizedPlannerPP(PDDLPlanner):
+class BestFirstGeneralizedPlanner(PDDLPlanner):
     """ BFGP++ is a Generalized PDDLPlanner, which in turn is an Engine & OneshotPlanner """
 
     def __init__(self, **options):
@@ -28,7 +33,7 @@ class BestFirstGeneralizedPlannerPP(PDDLPlanner):
         self._mode = options.get('mode', 'synthesis')
         self._theory = options.get('theory', 'cpp')
         self._program_lines = options.get('program_lines', None)
-        self._problem_folder = options.get('problem_folder', '.')
+        self._problem_folder = options.get('problem_folder', '..')
         self._evaluation_functions = options.get('evaluation_functions', None)
 
     @property
@@ -49,53 +54,51 @@ class BestFirstGeneralizedPlannerPP(PDDLPlanner):
 
     @staticmethod
     def supports(problem_kind) -> bool:
-        return problem_kind <= BestFirstGeneralizedPlannerPP.supported_kind()
+        return problem_kind <= BestFirstGeneralizedPlanner.supported_kind()
+
+    @staticmethod
+    def preprocess(domain_filename: str, problem_filename: str) -> str:
+        dest_dir = "tmp/"
+        shutil.rmtree(dest_dir, ignore_errors=True)
+        os.makedirs(dest_dir)
+        cmd = f"python bfgp_pp/preprocess/pddl_translator.py " \
+              f"-d {domain_filename} " \
+              f"-i {problem_filename} " \
+              f"-o {dest_dir} " \
+              f"-id 1"
+        subprocess.run(cmd.split())
+        return dest_dir
 
     def _get_cmd(self, domain_filename: str, problem_filename: str, plan_filename: str) -> List[str]:
-        print(plan_filename)
-        return f"bfgp_pp/main.bin -m synthesis -t cpp -l 15 -f bfgp_pp/domains/synthesis/gripper/ -o {plan_filename}".split()
+        compiled_folder = self.preprocess(domain_filename=domain_filename, problem_filename=problem_filename)
+        return f"bfgp_pp/main.bin -m synthesis -t cpp -l 15 -f {compiled_folder} -o {plan_filename}".split()
 
-
-
-    def _result_status(self, problem: "up.model.Problem", plan: Optional["up.plans.Plan"], retval: int,
-                       log_messages: Optional[
-                           List[LogMessage]] = None) -> "up.engines.results.PlanGenerationResultStatus":
+    def _result_status(self,
+                       problem: "up.model.Problem",
+                       plan: Optional["up.plans.Plan"],
+                       retval: int,
+                       log_messages: Optional[List[LogMessage]] = None) \
+            -> "up.engines.results.PlanGenerationResultStatus":
         """ Validate the problem """
-        return up.engines.results.PlanGenerationResultStatus.SOLVED_SATISFICING
+        if retval != 0:
+            return PlanGenerationResultStatus.INTERNAL_ERROR
+        elif plan is None:
+            return PlanGenerationResultStatus.UNSOLVABLE_PROVEN
+        else:
+            return PlanGenerationResultStatus.SOLVED_SATISFICING
 
 
 
 # Register the solver
 env = up.environment.get_environment()
-env.factory.add_engine('bfgp_pp', __name__, 'BestFirstGeneralizedPlannerPP')
-
-# Domain and instance
-emgr = env.expression_manager
-
-Location = env.type_manager.UserType('Location')
-robot_at = up.model.Fluent('robot_at', env.type_manager.BoolType(), loc=Location)
-move = up.model.InstantaneousAction('move', l_from=Location, l_to=Location)
-l_from = move.parameter('l_from')
-l_to = move.parameter('l_to')
-move.add_precondition(emgr.Not(emgr.Equals(l_from, l_to)))
-move.add_precondition(robot_at(l_from))
-move.add_precondition(emgr.Not(robot_at(l_to)))
-move.add_effect(robot_at(l_from), False)
-move.add_effect(robot_at(l_to), True)
-l1 = up.model.Object('l1', Location)
-l2 = up.model.Object('l2', Location)
-problem = up.model.Problem('robot')
-problem.add_fluent(robot_at)
-problem.add_action(move)
-problem.add_object(l1)
-problem.add_object(l2)
-problem.set_initial_value(robot_at(l1), True)
-problem.set_initial_value(robot_at(l2), False)
-problem.add_goal(robot_at(l2))
+env.factory.add_engine('bfgp', __name__, 'BestFirstGeneralizedPlanner')
 
 # Invoke planner
-with env.factory.OneshotPlanner(name='bfgp_pp') as p:
-    result = p.solve(problem, output_stream=sys.stdout)
+with env.factory.OneshotPlanner(name='bfgp') as p:
+    reader = PDDLReader()
+    pddl_problem = reader.parse_problem('bfgp_pp/domains/gripper/domain.pddl', 'bfgp_pp/domains/gripper/p01.pddl')
+    print(pddl_problem)
+    result = p.solve(pddl_problem, output_stream=sys.stdout)
     if result.status == PlanGenerationResultStatus.SOLVED_SATISFICING:
         print(f'{p.name} found a valid plan!')
         print(f'The plan is: {result.plan}')
