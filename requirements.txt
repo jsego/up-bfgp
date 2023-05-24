@@ -1,0 +1,9 @@
+antlr4-python3-runtime==4.7.2
+multipledispatch==0.6.0
+networkx==3.1
+psutil==5.9.5
+pyparsing==3.1.0b2
+six==1.16.0
+tarski==0.8.2
+unified-planning==0.6.0.56.dev1
+-e git+ssh://git@github.com/jsego/bfgp.git@03b6bc9e616915073dd3ebe42aaeebda977bce85#egg=up_bfgp

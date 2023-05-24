@@ -1,17 +1,15 @@
 import os
-import random
 import shutil
 import subprocess
-import tempfile
-from typing import Optional, Callable, IO, List
+from typing import Optional, Callable, IO, List, Union, Tuple
 from unified_planning.engines.results import PlanGenerationResultStatus
 import unified_planning as up
-import unified_planning.engines as engines
 from unified_planning.model import ProblemKind
 from unified_planning.engines import PDDLPlanner, LogMessage
 import sys
 from unified_planning.io import PDDLReader
-
+from unified_planning.plans.sequential_plan import SequentialPlan
+from unified_planning import engines
 
 class BestFirstGeneralizedPlanner(PDDLPlanner):
     """ BFGP++ is a Generalized PDDLPlanner, which in turn is an Engine & OneshotPlanner """
@@ -30,9 +28,12 @@ class BestFirstGeneralizedPlanner(PDDLPlanner):
             "long_description": "A framework based on Best-First Generalized Planning where solutions are either "
                                 "assembly-like programs, or structured programs that are syntactically terminating.",
         }
+        self.set_arguments(**options)
+
+    def set_arguments(self, **options):
         self._mode = options.get('mode', 'synthesis')
         self._theory = options.get('theory', 'cpp')
-        self._program_lines = options.get('program_lines', None)
+        self._program_lines = options.get('program_lines', 10)
         self._problem_folder = options.get('problem_folder', '..')
         self._evaluation_functions = options.get('evaluation_functions', None)
 
@@ -71,7 +72,50 @@ class BestFirstGeneralizedPlanner(PDDLPlanner):
 
     def _get_cmd(self, domain_filename: str, problem_filename: str, plan_filename: str) -> List[str]:
         compiled_folder = self.preprocess(domain_filename=domain_filename, problem_filename=problem_filename)
-        return f"bfgp_pp/main.bin -m synthesis -t cpp -l 15 -f {compiled_folder} -o {plan_filename}".split()
+        # print(compiled_folder)
+        command = f"bfgp_pp/main.bin -m {self._mode} -t {self._theory} -l {self._program_lines} " \
+                  f"-f {compiled_folder} -o {plan_filename}".split()
+        # print(command)
+        return command
+
+    def _plan_from_file(
+        self,
+        problem: "up.model.Problem",
+        plan_filename: str,
+        get_item_named: Callable[
+            [str],
+            Union[
+                "up.model.Type",
+                "up.model.Action",
+                "up.model.Fluent",
+                "up.model.Object",
+                "up.model.Parameter",
+                "up.model.Variable",
+            ],
+        ],
+    ) -> "up.plans.Plan":
+        env = problem.environment
+
+        # First we ground the problem # ToDo: very inneficient, better to generate only grounded actions in the plan
+        with env.factory.Compiler(problem_kind=problem.kind,
+                                  compilation_kind=engines.CompilationKind.GROUNDING) as grounder:
+            grounding_result = grounder.compile(problem, engines.CompilationKind.GROUNDING)
+        grounded_problem = grounding_result.problem
+
+        # We store the grounded actions in a list
+        actions = {ins_act.name: ins_act for ins_act in grounded_problem.instantaneous_actions}
+
+        # Validate the GP plan over the input problem
+        dest_prog = f'tmp/gp_plan.prog'
+        subprocess.run(f'cp {plan_filename} {dest_prog}', shell=True)
+        command = f"bfgp_pp/main.bin -m validation-cpp -t {self._theory} -f tmp/ -p {dest_prog}".split()
+        subprocess.run(command)
+
+        # The candidate plan, initially empty
+        plan = up.plans.SequentialPlan([])
+
+        return plan
+
 
     def _result_status(self,
                        problem: "up.model.Problem",
@@ -94,13 +138,14 @@ env = up.environment.get_environment()
 env.factory.add_engine('bfgp', __name__, 'BestFirstGeneralizedPlanner')
 
 # Invoke planner
-with env.factory.OneshotPlanner(name='bfgp') as p:
+with env.factory.OneshotPlanner(name='bfgp') as bfgp:
+    bfgp.set_arguments(program_lines=15)
     reader = PDDLReader()
     pddl_problem = reader.parse_problem('bfgp_pp/domains/gripper/domain.pddl', 'bfgp_pp/domains/gripper/p01.pddl')
-    print(pddl_problem)
-    result = p.solve(pddl_problem, output_stream=sys.stdout)
+    # print(pddl_problem)
+    result = bfgp.solve(pddl_problem, output_stream=sys.stdout)
     if result.status == PlanGenerationResultStatus.SOLVED_SATISFICING:
-        print(f'{p.name} found a valid plan!')
+        print(f'{bfgp.name} found a valid plan!')
         print(f'The plan is: {result.plan}')
         print('\n'.join(str(x) for x in result.plan.actions))
     else:
