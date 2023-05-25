@@ -109,12 +109,10 @@ class BestFirstGeneralizedPlanner(PDDLPlanner):
                     continue
                 # Extract action and params data
                 grounded_act = line[1:-2].split()
-                a = get_item_named(grounded_act[0])
-                params = []
-                for param in grounded_act[1:]:
-                        params.append(get_item_named(param))
+                action = get_item_named(grounded_act[0])
+                params = [get_item_named(param) for param in grounded_act[1:]]
                 # Build an ActionInstance with previous data
-                plan.actions.append(up.plans.ActionInstance(action=a, params=params))
+                plan.actions.append(up.plans.ActionInstance(action=action, params=params))
 
         # The validation starts
         with problem.environment.factory.PlanValidator(name='sequential_plan_validator') as pv:
