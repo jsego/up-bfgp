@@ -140,7 +140,26 @@ class BestFirstGeneralizedPlanner(PDDLPlanner):
             return PlanGenerationResultStatus.SOLVED_SATISFICING
 
 
-
 # Register the solver
 env = up.environment.get_environment()
 env.factory.add_engine('bfgp', __name__, 'BestFirstGeneralizedPlanner')
+
+
+def run_bfgp():
+    # Invoke planner
+    with env.factory.OneshotPlanner(name='bfgp') as bfgp:
+        bfgp.set_arguments(program_lines=15)
+        reader = PDDLReader()
+        pddl_problem = reader.parse_problem('bfgp_pp/domains/gripper/domain.pddl', 'bfgp_pp/domains/gripper/p01.pddl')
+        # print(pddl_problem)
+        result = bfgp.solve(pddl_problem, output_stream=sys.stdout)
+        if result.status == PlanGenerationResultStatus.SOLVED_SATISFICING:
+            print(f'{bfgp.name} found a valid plan!')
+            print(f'The plan is:')
+            print('\n'.join(str(x) for x in result.plan.actions))
+        else:
+            print('No plan found!')
+
+
+if __name__ == "__main__":
+    run_bfgp()
