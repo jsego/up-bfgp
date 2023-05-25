@@ -94,25 +94,32 @@ class BestFirstGeneralizedPlanner(PDDLPlanner):
             ],
         ],
     ) -> "up.plans.Plan":
-        env = problem.environment
-
-        # First we ground the problem # ToDo: very inneficient, better to generate only grounded actions in the plan
-        with env.factory.Compiler(problem_kind=problem.kind,
-                                  compilation_kind=engines.CompilationKind.GROUNDING) as grounder:
-            grounding_result = grounder.compile(problem, engines.CompilationKind.GROUNDING)
-        grounded_problem = grounding_result.problem
-
-        # We store the grounded actions in a list
-        actions = {ins_act.name: ins_act for ins_act in grounded_problem.instantaneous_actions}
-
         # Validate the GP plan over the input problem
         dest_prog = f'tmp/gp_plan.prog'
         subprocess.run(f'cp {plan_filename} {dest_prog}', shell=True)
-        command = f"bfgp_pp/main.bin -m validation-cpp -t {self._theory} -f tmp/ -p {dest_prog}".split()
+        command = f"bfgp_pp/main.bin -m validation-prog -t {self._theory} -f tmp/ -p {dest_prog}".split()
         subprocess.run(command)
 
-        # The candidate plan, initially empty
+        # Building candidate plan (from root folder)
+        plan_file = "plan.1"
         plan = up.plans.SequentialPlan([])
+        with open(plan_file) as pf:
+            for line in pf:
+                if line[0] == ';':
+                    continue
+                # Extract action and params data
+                grounded_act = line[1:-2].split()
+                a = get_item_named(grounded_act[0])
+                params = []
+                for param in grounded_act[1:]:
+                        params.append(get_item_named(param))
+                # Build an ActionInstance with previous data
+                plan.actions.append(up.plans.ActionInstance(action=a, params=params))
+
+        # The validation starts
+        with problem.environment.factory.PlanValidator(name='sequential_plan_validator') as pv:
+            if pv.validate(problem, plan):
+                print("Plan validated!")
 
         return plan
 
@@ -146,7 +153,7 @@ with env.factory.OneshotPlanner(name='bfgp') as bfgp:
     result = bfgp.solve(pddl_problem, output_stream=sys.stdout)
     if result.status == PlanGenerationResultStatus.SOLVED_SATISFICING:
         print(f'{bfgp.name} found a valid plan!')
-        print(f'The plan is: {result.plan}')
+        print(f'The plan is:')
         print('\n'.join(str(x) for x in result.plan.actions))
     else:
         print('No plan found!')
