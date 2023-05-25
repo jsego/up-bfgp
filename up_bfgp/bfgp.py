@@ -1,7 +1,7 @@
 import os
 import shutil
 import subprocess
-from typing import Optional, Callable, IO, List, Union, Tuple
+from typing import Optional, Callable, List, Union
 from unified_planning.engines.results import PlanGenerationResultStatus
 import unified_planning as up
 from unified_planning.model import ProblemKind
@@ -9,7 +9,7 @@ from unified_planning.engines import PDDLPlanner, LogMessage
 import sys
 from unified_planning.io import PDDLReader
 from unified_planning.plans.sequential_plan import SequentialPlan
-from unified_planning import engines
+
 
 class BestFirstGeneralizedPlanner(PDDLPlanner):
     """ BFGP++ is a Generalized PDDLPlanner, which in turn is an Engine & OneshotPlanner """
@@ -115,10 +115,9 @@ class BestFirstGeneralizedPlanner(PDDLPlanner):
                 plan.actions.append(up.plans.ActionInstance(action=action, params=params))
 
         # The validation starts
-        with problem.environment.factory.PlanValidator(name='sequential_plan_validator') as pv:
-            if pv.validate(problem, plan):
-                print("Plan validated!")
+        assert problem.environment.factory.PlanValidator(name='sequential_plan_validator').validate(problem, plan)
 
+        # Return the plan
         return plan
 
 
