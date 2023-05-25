@@ -24,8 +24,13 @@ cd up-bfgp/
 python3 -m venv venv
 source venv/bin/activate 
 ```
-4. Install the package and its dependencies
+4. Clone and install our version of the Unified Planning library
 ```shell
+git clone -b gp-planner git@github.com:jsego/unified-planning.git
+```
+5. Install the package and its dependencies
+```shell
+pip install unified-planning/
 pip install -r requirements.txt
 pip install -e .
 ```
