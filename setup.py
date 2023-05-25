@@ -44,11 +44,15 @@ class InstallBFGPdevelop(develop):
 
 setup(
     name=PKG_NAME,
-    version="0.0.1",
+    version='0.0.1',
     description=PKG_NAME,
     author="Javier Segovia-Aguas, Sergio Jiménez and Anders Jonsson",
     author_email="javier.segovia@upf.edu",
     packages=[PKG_NAME],
+    package_data={
+        "": ['bfgp_pp/main.bin',
+             'bfgp_pp/preprocess/pddl_translator.py']
+    },
     cmdclass={"build_py": InstallBFGP, "develop": InstallBFGPdevelop},
     license="GNUv3",
 )

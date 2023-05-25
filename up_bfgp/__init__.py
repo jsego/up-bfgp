@@ -1,1 +1,1 @@
-from .bfgp import BestFirstGeneralizedPlannerPP
+from .bfgp import BestFirstGeneralizedPlanner

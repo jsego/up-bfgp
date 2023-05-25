@@ -9,7 +9,7 @@ from unified_planning.engines import PDDLPlanner, LogMessage
 import sys
 from unified_planning.io import PDDLReader
 from unified_planning.plans.sequential_plan import SequentialPlan
-
+import pkg_resources
 
 class BestFirstGeneralizedPlanner(PDDLPlanner):
     """ BFGP++ is a Generalized PDDLPlanner, which in turn is an Engine & OneshotPlanner """
@@ -62,18 +62,21 @@ class BestFirstGeneralizedPlanner(PDDLPlanner):
         dest_dir = "tmp/"
         shutil.rmtree(dest_dir, ignore_errors=True)
         os.makedirs(dest_dir)
-        cmd = f"python bfgp_pp/preprocess/pddl_translator.py " \
-              f"-d {domain_filename} " \
-              f"-i {problem_filename} " \
-              f"-o {dest_dir} " \
-              f"-id 1"
+        translator = pkg_resources.resource_filename(__name__, "bfgp_pp/preprocess/pddl_translator.py")
+        cmd = f"python {translator} -d {domain_filename} -i {problem_filename} -o {dest_dir} -id 1"
+        #cmd = f"python bfgp_pp/preprocess/pddl_translator.py " \
+        #      f"-d {domain_filename} " \
+        #      f"-i {problem_filename} " \
+        #      f"-o {dest_dir} " \
+        #      f"-id 1"
         subprocess.run(cmd.split())
         return dest_dir
 
     def _get_cmd(self, domain_filename: str, problem_filename: str, plan_filename: str) -> List[str]:
         compiled_folder = self.preprocess(domain_filename=domain_filename, problem_filename=problem_filename)
         # print(compiled_folder)
-        command = f"bfgp_pp/main.bin -m {self._mode} -t {self._theory} -l {self._program_lines} " \
+        main_bin = pkg_resources.resource_filename(__name__, "bfgp_pp/main.bin")
+        command = f"{main_bin} -m {self._mode} -t {self._theory} -l {self._program_lines} " \
                   f"-f {compiled_folder} -o {plan_filename}".split()
         # print(command)
         return command
@@ -97,7 +100,8 @@ class BestFirstGeneralizedPlanner(PDDLPlanner):
         # Validate the GP plan over the input problem
         dest_prog = f'tmp/gp_plan.prog'
         subprocess.run(f'cp {plan_filename} {dest_prog}', shell=True)
-        command = f"bfgp_pp/main.bin -m validation-prog -t {self._theory} -f tmp/ -p {dest_prog}".split()
+        main_bin = pkg_resources.resource_filename(__name__, "bfgp_pp/main.bin")
+        command = f"{main_bin} -m validation-prog -t {self._theory} -f tmp/ -p {dest_prog}".split()
         subprocess.run(command)
 
         # Building candidate plan (from root folder)
@@ -140,17 +144,3 @@ class BestFirstGeneralizedPlanner(PDDLPlanner):
 # Register the solver
 env = up.environment.get_environment()
 env.factory.add_engine('bfgp', __name__, 'BestFirstGeneralizedPlanner')
-
-# Invoke planner
-with env.factory.OneshotPlanner(name='bfgp') as bfgp:
-    bfgp.set_arguments(program_lines=15)
-    reader = PDDLReader()
-    pddl_problem = reader.parse_problem('bfgp_pp/domains/gripper/domain.pddl', 'bfgp_pp/domains/gripper/p01.pddl')
-    # print(pddl_problem)
-    result = bfgp.solve(pddl_problem, output_stream=sys.stdout)
-    if result.status == PlanGenerationResultStatus.SOLVED_SATISFICING:
-        print(f'{bfgp.name} found a valid plan!')
-        print(f'The plan is:')
-        print('\n'.join(str(x) for x in result.plan.actions))
-    else:
-        print('No plan found!')
