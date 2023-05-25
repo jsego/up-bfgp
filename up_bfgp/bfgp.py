@@ -104,25 +104,8 @@ class BestFirstGeneralizedPlanner(PDDLPlanner):
         command = f"{main_bin} -m validation-prog -t {self._theory} -f tmp/ -p {dest_prog}".split()
         subprocess.run(command)
 
-        # Building candidate plan (from root folder)
-        plan_file = "plan.1"
-        plan = up.plans.SequentialPlan([])
-        with open(plan_file) as pf:
-            for line in pf:
-                if line[0] == ';':
-                    continue
-                # Extract action and params data
-                grounded_act = line[1:-2].split()
-                action = get_item_named(grounded_act[0])
-                params = [get_item_named(param) for param in grounded_act[1:]]
-                # Build an ActionInstance with previous data
-                plan.actions.append(up.plans.ActionInstance(action=action, params=params))
+        return super()._plan_from_file(problem, "plan.1", get_item_named)
 
-        # The validation starts
-        assert problem.environment.factory.PlanValidator(name='sequential_plan_validator').validate(problem, plan)
-
-        # Return the plan
-        return plan
 
 
     def _result_status(self,
