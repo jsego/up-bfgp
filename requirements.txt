@@ -5,4 +5,5 @@ psutil==5.9.5
 pyparsing==3.1.0b2
 six==1.16.0
 tarski==0.8.2
+wheel==0.40.0
 
